@@ -1,0 +1,10 @@
+**/__pycache__/
+*.egg-info/
+.venv/
+.vscode/
+data/
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.safetensors
