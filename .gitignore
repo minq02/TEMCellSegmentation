@@ -2,7 +2,7 @@
 *.egg-info/
 .venv/
 .vscode/
-data/
+*.h5
 *.pt
 *.pth
 *.ckpt
