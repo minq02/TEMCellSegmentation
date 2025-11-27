@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 
 from src.datasets.tem_dataset import TEMTestDataset
 from src.models.unet_small import UNetSmall
+from src.models.attention_unet import AttentionUNet
 
 
 def predict_full_image(
@@ -62,13 +63,13 @@ def main():
     print("Using device:", device)
 
     test_h5_path = "data/test/test_data.h5"         # adjust if needed
-    weights_path = "tem_unet_small.pth"        # or last
+    weights_path = "tem_attention_unet_best.pth"        # or last
     output_dir = "predictions"
     os.makedirs(output_dir, exist_ok=True)
 
     test_ds = TEMTestDataset(test_h5_path)
 
-    model = UNetSmall(in_ch=1, n_classes=5).to(device)
+    model = AttentionUNet(in_ch=1, n_classes=5).to(device)
     model.load_state_dict(torch.load(weights_path, map_location=device))
     model.eval()
 

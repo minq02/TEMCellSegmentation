@@ -1,6 +1,8 @@
 import h5py
 import torch
 from torch.utils.data import Dataset
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 
 class TEMTrainDataset(Dataset):
     def __init__(self, h5_path, transform=None, target_transform=None):
@@ -60,14 +62,12 @@ class TEMPatchDataset(Dataset):
         patch_size=512,
         stride=None,
         keys=None,
-        transform=None,
-        target_transform=None,
+        aug=None,
     ):
         self.h5_path = h5_path
         self.patch_size = patch_size
         self.stride = stride if stride is not None else patch_size
-        self.transform = transform
-        self.target_transform = target_transform
+        self.aug = aug
         self.index = []  # list of (key, top, left)
 
         with h5py.File(h5_path, "r") as f:
@@ -75,9 +75,8 @@ class TEMPatchDataset(Dataset):
             all_keys = sorted(raw_group.keys(), key=str)
 
             if keys is None:
-                keys = all_keys      # use all images
+                keys = all_keys
             else:
-                # keep only keys that actually exist in the file
                 keys = [k for k in keys if k in raw_group.keys()]
 
             for k in keys:
@@ -88,7 +87,6 @@ class TEMPatchDataset(Dataset):
 
         print(f"[TEMPatchDataset] {len(self.index)} patches from {len(keys)} images")
 
-
     def __len__(self):
         return len(self.index)
 
@@ -97,18 +95,22 @@ class TEMPatchDataset(Dataset):
         p = self.patch_size
 
         with h5py.File(self.h5_path, "r") as f:
-            img_full = f["raw"][k]
-            mask_full = f["label"][k]
+            img_full = f["raw"][k][()]    # (H, W)
+            mask_full = f["label"][k][()] # (H, W)
 
-            img = img_full[top:top+p, left:left+p]
-            mask = mask_full[top:top+p, left:left+p]
+        img = img_full[top:top+p, left:left+p]
+        mask = mask_full[top:top+p, left:left+p]
 
-        img = torch.from_numpy(img).float()   # (H, W)
-        mask = torch.from_numpy(mask).long()  # (H, W) with labels 0..4
+        img = img.astype("float32")
+        mask = mask.astype("uint8")
 
-        if self.transform is not None:
-            img = self.transform(img)
-        if self.target_transform is not None:
-            mask = self.target_transform(mask)
+        if self.aug is not None:
+            augmented = self.aug(image=img, mask=mask)
+            img = augmented["image"]           # torch.float32, (1, p, p)
+            mask = augmented["mask"].long()    # torch.long, (p, p)
+        else:
+            img = torch.from_numpy(img).unsqueeze(0)
+            img = (img - 0.5) / 0.5
+            mask = torch.from_numpy(mask).long()
 
         return img, mask
