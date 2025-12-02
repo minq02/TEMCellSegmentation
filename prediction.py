@@ -12,7 +12,7 @@ def predict_full_image(
     model,
     img_tensor,
     patch_size=512,
-    stride=256,
+    stride=512,
     num_classes=5,
     device="cuda",
 ):

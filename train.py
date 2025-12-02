@@ -45,11 +45,11 @@ print("Using device:", device)
 h5_path = "data/train/train_data.h5"
 patch_size = 512  # 512 x 512 patches since original image is too large
 stride = 512      # change if need to overlap
-batch_size = 2    # adjust based on GPU
-num_epochs = 50   # can go higher now that we have early stopping
+batch_size = 8    # adjust based on GPU
+num_epochs = 100   # can go higher now that we have early stopping
 
 # ---- early stopping & checkpoint hyperparams ----
-patience = 5          # stop if no val improvement for this many epochs
+patience = 10         # stop if no val improvement for this many epochs
 min_delta = 1e-4      # minimum improvement to count as "better"
 
 # ---- split image keys into train / val sets ----
@@ -70,16 +70,16 @@ train_ds = TEMPatchDataset(
     h5_path,
     patch_size=patch_size,
     stride=stride,
-    keys=train_keys,
-    aug=train_aug
+    keys=train_keys
+    # aug=train_aug
 )
 
 val_ds = TEMPatchDataset(
     h5_path,
     patch_size=patch_size,
     stride=stride,
-    keys=val_keys,
-    aug=val_aug
+    keys=val_keys
+    # aug=val_aug
 )
 
 train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  num_workers=4)
