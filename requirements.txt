@@ -1,5 +1,6 @@
 h5py
 numpy
 torch
-matplotlib
 albumentations
+opencv-python-headless
+matplotlib
