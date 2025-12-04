@@ -5,10 +5,11 @@ import json
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
+import cv2
 
 from src.datasets.tem_dataset import TEMPatchDataset
 from src.models.unet_small import UNetSmall
-from src.models.attention_unet import AttentionUNet
+from src.models.attention_unet import AttentionUNet, AdaptedAttentionUNet
 from src.utils.losses import dice_loss
 
 import albumentations as A
@@ -19,21 +20,38 @@ train_aug = A.Compose(
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
         A.RandomRotate90(p=0.5),
-        A.ShiftScaleRotate(
-            shift_limit=0.05,
-            scale_limit=0.05,
-            rotate_limit=15,
-            border_mode=0,  # 0 = constant, good for masks
+
+        A.Affine(
+            scale=(0.9, 1.1),
+            rotate=(-10, 10),
+            translate_percent=(0.0, 0.0),
+            fit_output=False,
             p=0.5,
         ),
-        A.RandomBrightnessContrast(p=0.3),
+
+        A.OneOf(
+            [
+                A.Downscale(
+                    scale_range=(0.8, 0.95),   # mild low-res
+                    interpolation_pair={
+                        "downscale": cv2.INTER_AREA,
+                        "upscale": cv2.INTER_LINEAR,
+                    },
+                    p=1.0,
+                ),
+                A.GaussianBlur(blur_limit=(3, 5), p=1.0),
+            ],
+            p=0.2,  # only 20% of samples get touched
+        ),
+
         A.Normalize(mean=(0.5,), std=(0.5,)),
         ToTensorV2(),
     ]
 )
 
+
 val_aug = A.Compose(
-    [
+    [   
         A.Normalize(mean=(0.5,), std=(0.5,)),
         ToTensorV2(),
     ]
@@ -42,11 +60,14 @@ val_aug = A.Compose(
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
-h5_path = "data/train/train_data.h5"
+# h5_path = "data/train/train_data.h5"
+h5_path = "data/train/train_data_downsampled.h5"
 patch_size = 512  # 512 x 512 patches since original image is too large
-stride = 512      # change if need to overlap
+stride = 256      # change if need to overlap
 batch_size = 8    # adjust based on GPU
-num_epochs = 100   # can go higher now that we have early stopping
+num_epochs = 150   # can go higher now that we have early stopping
+
+# gradient accumulation
 
 # ---- early stopping & checkpoint hyperparams ----
 patience = 10         # stop if no val improvement for this many epochs
@@ -56,7 +77,8 @@ min_delta = 1e-4      # minimum improvement to count as "better"
 with h5py.File(h5_path, "r") as f:
     all_keys = sorted(f["raw"].keys(), key=str)
 
-random.seed(42)  # for reproducibility
+# random.seed(41)  # for reproducibility
+random.seed(46)  # for reproducibility
 random.shuffle(all_keys)
 
 val_keys = all_keys[-2:]
@@ -70,16 +92,16 @@ train_ds = TEMPatchDataset(
     h5_path,
     patch_size=patch_size,
     stride=stride,
-    keys=train_keys
-    # aug=train_aug
+    keys=train_keys,
+    aug=train_aug
 )
 
 val_ds = TEMPatchDataset(
     h5_path,
     patch_size=patch_size,
     stride=stride,
-    keys=val_keys
-    # aug=val_aug
+    keys=val_keys,
+    aug=val_aug
 )
 
 train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True,  num_workers=4)
@@ -88,9 +110,10 @@ val_loader   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, num_wo
 # ---- model, loss, optimizer, scheduler ----
 # model = UNetSmall(in_ch=1, n_classes=5).to(device)  # 5 classes including background
 model = AttentionUNet(in_ch=1, n_classes=5).to(device)  # 5 classes including background
+# model = AdaptedAttentionUNet(in_ch=1, n_classes=5).to(device)
 
 criterion_ce = nn.CrossEntropyLoss()
-dice_weight = 1.0  # how important is dice loss compared to CE loss
+dice_weight = 0.5  # how important is dice loss compared to CE loss
 
 optimizer = optim.Adam(model.parameters(), lr=1e-3)
 
@@ -189,6 +212,7 @@ for epoch in range(num_epochs):
         epochs_no_improve = 0
         # torch.save(model.state_dict(), "tem_unet_small_best.pth")
         torch.save(model.state_dict(), "tem_attention_unet_best.pth")
+        # torch.save(model.state_dict(), "tem_adapted_attention_unet_best.pth")
         print(f"  -> New best model saved with val loss {best_val_loss:.4f}")
     else:
         epochs_no_improve += 1
@@ -209,4 +233,5 @@ with open("loss_history.json", "w") as f:
 # also save the final state if you want
 # torch.save(model.state_dict(), "tem_unet_small_last.pth")
 torch.save(model.state_dict(), "tem_attention_unet_last.pth")
+# torch.save(model.state_dict(), "tem_adapted_attention_unet_last.pth")
 print("Training finished.")

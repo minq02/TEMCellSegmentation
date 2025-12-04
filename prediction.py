@@ -5,27 +5,21 @@ import matplotlib.pyplot as plt
 
 from src.datasets.tem_dataset import TEMTestDataset
 from src.models.unet_small import UNetSmall
-from src.models.attention_unet import AttentionUNet
+from src.models.attention_unet import AttentionUNet, AdaptedAttentionUNet
 
 
 def predict_full_image(
     model,
     img_tensor,
     patch_size=512,
-    stride=512,
+    stride=256,
     num_classes=5,
     device="cuda",
 ):
-    """
-    Patch-based inference with overlapping patches and logits averaging.
-
-    img_tensor: (H, W) float tensor
-    returns: (H, W) int32 numpy array of predicted labels (0..num_classes-1)
-    """
     model.eval()
     device = torch.device(device if torch.cuda.is_available() else "cpu")
 
-    img_np = img_tensor.cpu().numpy()
+    img_np = img_tensor.cpu().numpy().astype("float32")
     H, W = img_np.shape
 
     logits_accum = np.zeros((num_classes, H, W), dtype=np.float32)
@@ -33,7 +27,6 @@ def predict_full_image(
 
     ys = list(range(0, max(H - patch_size, 0) + 1, stride))
     xs = list(range(0, max(W - patch_size, 0) + 1, stride))
-
     if ys[-1] + patch_size < H:
         ys.append(H - patch_size)
     if xs[-1] + patch_size < W:
@@ -42,18 +35,28 @@ def predict_full_image(
     with torch.no_grad():
         for top in ys:
             for left in xs:
-                patch_np = img_np[top:top+patch_size, left:left+patch_size]
-                patch = torch.from_numpy(patch_np).float().unsqueeze(0).unsqueeze(0).to(device)
+                patch_np = img_np[top:top+patch_size, left:left+patch_size].astype("float32")
 
-                logits = model(patch)             # (1, C, ps, ps)
+                # Match training-time Albumentations Normalize(mean=0.5, std=0.5)
+                patch_np = patch_np / 255.0          # [0,255] -> [0,1]
+                patch_np = (patch_np - 0.5) / 0.5    # [0,1]   -> [-1,1]
+
+                patch = (
+                    torch.from_numpy(patch_np)
+                    .unsqueeze(0)      # channel dim -> [1, H, W]
+                    .unsqueeze(0)      # batch dim   -> [1, 1, H, W]
+                    .to(device)
+                )
+
+                logits = model(patch)                     # (1, C, ps, ps)
                 logits = logits.squeeze(0).cpu().numpy()  # (C, ps, ps)
 
+                # 🔑 accumulate logits and counts
                 logits_accum[:, top:top+patch_size, left:left+patch_size] += logits
                 counts[top:top+patch_size, left:left+patch_size] += 1.0
 
     counts[counts == 0] = 1.0
     avg_logits = logits_accum / counts[None, :, :]
-
     pred = avg_logits.argmax(axis=0).astype(np.int32)
     return pred
 
@@ -63,6 +66,7 @@ def main():
     print("Using device:", device)
 
     test_h5_path = "data/test/test_data.h5"         # adjust if needed
+    # test_h5_path = "data/train/train_data.h5"
     weights_path = "tem_attention_unet_best.pth"        # or last
     output_dir = "predictions"
     os.makedirs(output_dir, exist_ok=True)

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# attention positional data check
 
 class DoubleConv(nn.Module):
     """
@@ -188,3 +189,20 @@ if __name__ == "__main__":
     with torch.no_grad():
         y = model(x)
     print("Input:", x.shape, "Output:", y.shape)
+
+class AdaptedAttentionUNet(nn.Module):
+    """
+    Tiny learnable input adapter + Attention U-Net.
+    Adapter is a single conv layer that can learn to fix
+    brightness/contrast/low-frequency issues in raw images.
+    """
+    def __init__(self, in_ch=1, n_classes=5, base_ch=64):
+        super().__init__()
+        # 1-layer "adapter" as suggested by your professor
+        self.adapter = nn.Conv2d(in_ch, in_ch, kernel_size=3, padding=1)
+        # your original Attention U-Net
+        self.unet = AttentionUNet(in_ch=in_ch, n_classes=n_classes, base_ch=base_ch)
+
+    def forward(self, x):
+        x = self.adapter(x)
+        return self.unet(x)
