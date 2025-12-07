@@ -5,8 +5,8 @@ Automatic multi-class cell segmentation on Transmission Electron Microscopy (TEM
 ## Visual overview
 - Attention U-Net architecture:  
   ![Attention U-Net](media/model_description.png)
-- Test set qualitative result:  
-  ![Testing segmentation](media/testing.png)
+- Inferenced Example (from training set):  
+  ![Testing segmentation](media/example.png)
 
 ## Project overview
 - Task: fully supervised semantic segmentation on high-resolution TEM images stored in HDF5 (`raw` and `label` groups per image key).
@@ -35,6 +35,8 @@ Checkpoints and `loss_history.json` are written in the repo root; adjust model c
   ![Training Dice](media/training.png)
 - Validation mean and per-class Dice:  
   ![Validation Dice](media/validation.png)
+- Test set result:  
+  ![Testing segmentation](media/testing.png)
 
 ## Inference
 Place a trained weight file (e.g., `tem_attention_unet_best.pth`) in the project root, point `test_h5_path` in `prediction.py` to your test set, and run:
