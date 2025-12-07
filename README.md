@@ -2,6 +2,12 @@
 
 Automatic multi-class cell segmentation on Transmission Electron Microscopy (TEM) grayscale images using an Attention U-Net trained on labeled HDF5 volumes.
 
+## Visual overview
+- Attention U-Net architecture:  
+  ![Attention U-Net](media/model_description.png)
+- Test set qualitative result:  
+  ![Testing segmentation](media/testing.png)
+
 ## Project overview
 - Task: fully supervised semantic segmentation on high-resolution TEM images stored in HDF5 (`raw` and `label` groups per image key).
 - Data handling: extract 512×512 patches with 256 stride from 11 labeled images; 9 train / 2 val split driven by shuffled keys.
@@ -23,6 +29,12 @@ Training defaults are configured in `train.py` (paths, patch size 512, stride 25
 python train.py
 ```
 Checkpoints and `loss_history.json` are written in the repo root; adjust model choice in `train.py` if you prefer another UNet variant.
+
+## Results
+- Training mean and per-class Dice:  
+  ![Training Dice](media/training.png)
+- Validation mean and per-class Dice:  
+  ![Validation Dice](media/validation.png)
 
 ## Inference
 Place a trained weight file (e.g., `tem_attention_unet_best.pth`) in the project root, point `test_h5_path` in `prediction.py` to your test set, and run:
